@@ -12,6 +12,7 @@ import (
 	"github.com/osixia/container-baseimage/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -21,6 +22,7 @@ import (
 
 type flags struct {
 	detector.Options
+	DisableCRDs bool
 }
 
 var cmdFlags = &flags{}
@@ -41,6 +43,7 @@ var cmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 
 		helpers.Mustf(cnf.Unmarshal(&cmdFlags.Options), "Invalid detector configuration")
+		cmdFlags.WatchCRDs = !cnf.GetBool("disable-crds")
 
 		return cmdlog.HandleFlags(cmd)
 	},
@@ -65,11 +68,12 @@ func init() {
 	// flags
 	cmd.Flags().SortFlags = false
 
-	cmd.Flags().StringSliceVarP(&cmdFlags.VIPs, "vips", "", nil, "comma-separated canonical IPv4/IPv6 VIPs; flag may be repeated, omit to disable VIP detection")
+	cmd.Flags().StringSliceVarP(&cmdFlags.VIPs, "vips", "", nil, "comma-separated canonical IPv4/IPv6 VIPs; flag may be repeated")
 	cmd.Flags().StringVar(&cmdFlags.VIPLabelPrefix, "vip-label-prefix", config.DefaultVIPLabelPrefix, "literal prefix prepended to each VIP label")
 
 	cmd.Flags().StringSliceVar(&cmdFlags.Peers, "peers", nil, "named TCP peers: database=10.0.0.20:5432,api=[2001:db8::1]:443")
 	cmd.Flags().StringVar(&cmdFlags.PeerLabelPrefix, "peer-label-prefix", config.DefaultPeerLabelPrefix, "literal prefix prepended to each peer name")
+	cmd.Flags().BoolVar(&cmdFlags.DisableCRDs, "disable-crds", false, "disable VIP and Peer CRD discovery; use only targets configured through flags")
 
 	cmd.Flags().StringVar(&cmdFlags.Key, "key", "", "hex-encoded 32-byte HMAC key (64 hexadecimal characters)")
 	cmd.Flags().IntVar(&cmdFlags.Port, "port", 9876, "direct node TCP probe port")
@@ -100,7 +104,7 @@ func runDetector(ctx context.Context, options detector.Options) error {
 	if identity.Node == "" {
 		return fmt.Errorf("%s_NODE_NAME is required (Downward API)", config.EnvironmentPrefix)
 	}
-	if len(options.VIPs) != 0 && (identity.Namespace == "" || identity.PodUID == "") {
+	if (len(options.VIPs) != 0 || options.WatchCRDs) && (identity.Namespace == "" || identity.PodUID == "") {
 		return fmt.Errorf("%[1]s_POD_NAMESPACE and %[1]s_POD_UID are required for VIP detection (Downward API)", config.EnvironmentPrefix)
 	}
 	if err := options.Validate(); err != nil {
@@ -117,7 +121,17 @@ func runDetector(ctx context.Context, options detector.Options) error {
 		return err
 	}
 
-	service, err := detector.New(client, identity, options)
+	var dynamicClient dynamic.Interface
+	if options.WatchCRDs {
+		watchConfig := rest.CopyConfig(clientConfig)
+		// Watches are long-lived; keep the ordinary API client's request timeout.
+		watchConfig.Timeout = 0
+		dynamicClient, err = dynamic.NewForConfig(watchConfig)
+		if err != nil {
+			return err
+		}
+	}
+	service, err := detector.NewWithDynamicClient(client, dynamicClient, identity, options)
 	if err != nil {
 		return err
 	}
