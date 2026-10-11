@@ -1,3 +1,86 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: vips.network.cloud.osixia.net
+spec:
+  group: network.cloud.osixia.net
+  scope: Namespaced
+  names:
+    kind: VIP
+    plural: vips
+    singular: vip
+    shortNames: [nvip]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: Address
+          type: string
+          jsonPath: .spec.address
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              required: [address]
+              properties:
+                address:
+                  type: string
+                  minLength: 1
+                  maxLength: 45
+                  description: Canonical unicast IPv4 or IPv6 VIP to observe; no CIDR or brackets.
+                  x-kubernetes-validations:
+                    - rule: isIP(self)
+                      message: address must be an IPv4 or IPv6 address
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: peers.network.cloud.osixia.net
+spec:
+  group: network.cloud.osixia.net
+  scope: Namespaced
+  names:
+    kind: Peer
+    plural: peers
+    singular: peer
+    shortNames: [npeer]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: Address
+          type: string
+          jsonPath: .spec.address
+        - name: Port
+          type: integer
+          jsonPath: .spec.port
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              required: [address, port]
+              properties:
+                address:
+                  type: string
+                  minLength: 1
+                  maxLength: 45
+                  description: Unicast IPv4 or IPv6 TCP endpoint; no CIDR or brackets.
+                  x-kubernetes-validations:
+                    - rule: isIP(self)
+                      message: address must be an IPv4 or IPv6 address
+                port:
+                  type: integer
+                  minimum: 1
+                  maximum: 65535
+---
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -9,6 +92,16 @@ metadata:
   name: kube-network-detector
   namespace: kube-network-detector
 ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kube-network-detector-auth
+  namespace: kube-network-detector
+type: Opaque
+stringData:
+  # Replace this example key before using the manifest in production.
+  hmac-key: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -17,7 +110,7 @@ rules:
   - apiGroups: [""]
     resources: [nodes]
     verbs: [get, list, patch]
-  - apiGroups: [network.osixia.net]
+  - apiGroups: [network.cloud.osixia.net]
     resources: [vips, peers]
     verbs: [list, watch]
 ---
@@ -102,11 +195,7 @@ spec:
           image: osixia/kube-network-detector
           imagePullPolicy: IfNotPresent
           args:
-            # CRD discovery is enabled by default; install docs/crds/ first.
-            # Add --disable-crds to use only static targets.
-            - --vips=203.0.113.10,198.51.100.20
             - --vip-label-prefix=kube-network-detector/
-            - --peers=database=10.0.0.20:5432
             - --peer-label-prefix=kube-network-detector/peer-
             - --port=9876
             - --log-level=info

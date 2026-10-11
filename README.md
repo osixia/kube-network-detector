@@ -118,9 +118,6 @@ including `KUBE_NETWORK_DETECTOR_PEERS`.
 
 Use `hostNetwork: true` to measure connectivity from the node network.
 Peer detection requires `get/patch` on Nodes and no Lease permissions.
-A ready-to-use peers-only example is provided in
-[`docs/examples/kubernetes/peers-only.yaml`](docs/examples/kubernetes/peers-only.yaml).
-It omits the VIP responder, HMAC secret, TCP health probes and Lease RBAC.
 
 Labels remain on shutdown and are reconciled by the next running instance.
 When removing a peer or changing its name/prefix, remove its old labels explicitly;
@@ -129,43 +126,33 @@ endpoints. Avoid multiple deployments writing the same label on a node.
 
 ## Kubernetes deployment
 
-The combined VIP and peer [manifest](docs/examples/kubernetes/kube-network-detector.yaml) includes
-the namespace, service account, RBAC and DaemonSet. It targets Linux nodes,
+The [manifest](docs/examples/kubernetes/kube-network-detector.yaml) includes
+both CRDs, the namespace, Secret, service account, RBAC and DaemonSet. It targets Linux nodes,
 including control-plane nodes with standard `NoSchedule` taints. Add tolerations
 for any custom taints on nodes that must run a responder.
 
-For a peer-only deployment, use
-[`peers-only.yaml`](docs/examples/kubernetes/peers-only.yaml); it requires no HMAC
-Secret or probe server port. The steps below describe the combined deployment.
-
 Before deploying:
 
-- Install both CRDs from `docs/crds/`, or add `--disable-crds` for static-only operation.
-- Replace the example VIPs and peers in the DaemonSet's `args`.
-- Remove `--vips` or `--peers` if only one detection mode is needed.
+- Replace the example HMAC key in the Secret before using the manifest in production.
 - Check that TCP port 9876 is free on each node and reachable through the VIPs
   from the nodes performing probes.
 - Allow `hostNetwork` under your cluster's admission rules.
 
-Create a shared HMAC key, then apply the manifest:
+Apply the single manifest:
 
 ```bash
-kubectl create namespace kube-network-detector
-kubectl -n kube-network-detector create secret generic kube-network-detector-auth \
-  --from-literal=hmac-key="$(openssl rand -hex 32)"
-kubectl apply -f docs/crds/
-kubectl wait --for=condition=Established --timeout=60s \
-  crd/vips.network.osixia.net crd/peers.network.osixia.net
 kubectl apply -f docs/examples/kubernetes/kube-network-detector.yaml
+kubectl wait --for=condition=Established --timeout=60s \
+  crd/vips.network.cloud.osixia.net crd/peers.network.cloud.osixia.net
 kubectl -n kube-network-detector rollout status daemonset/kube-network-detector
 kubectl -n kube-network-detector logs -l app.kubernetes.io/name=kube-network-detector --prefix --tail=100
-kubectl get nodes -L kube-network-detector/203.0.113.10
 ```
 
-Create the namespace and Secret once; reuse the same key for all responders and
-observers. The key contains 64 hexadecimal characters representing 32 random
-bytes. Kubernetes supplies it through `secretKeyRef`; the application does not
-read Secrets through the API or load a key file.
+The manifest creates no VIP or Peer objects. Add those objects separately in the
+namespaces that own the targets. The same HMAC key must be used by all responders
+and observers; it contains 64 hexadecimal characters representing 32 random bytes.
+Kubernetes supplies it through `secretKeyRef`; the application does not read
+Secrets through the API or load a key file.
 
 The manifest uses a non-root user, drops all capabilities and makes the root
 filesystem read-only. Reading interface addresses normally requires no added
@@ -250,7 +237,7 @@ prefix and default label prefix are defined in [config/config.go](config/config.
 
 ### Targets declared in Kubernetes
 
-The CLI discovers `network.osixia.net/v1alpha1` resources across all namespaces
+The CLI discovers `network.cloud.osixia.net/v1alpha1` resources across all namespaces
 by default. Use `--disable-crds` (no value needed), or
 `KUBE_NETWORK_DETECTOR_DISABLE_CRDS=true`, to use only static targets without
 CRDs or CRD API permissions. `--disable-crds=false` explicitly keeps discovery
@@ -258,50 +245,12 @@ enabled and overrides the environment variable.
 CRD targets are added to `--vips` and `--peers`, not substituted for them.
 An initially empty target list is allowed in CRD mode.
 
-Install both namespaced CRDs and grant the detector read permissions:
-
-```bash
-kubectl apply -f docs/crds/
-kubectl wait --for=condition=Established --timeout=60s \
-  crd/vips.network.osixia.net crd/peers.network.osixia.net
-```
-
-Then apply the combined DaemonSet manifest, which includes CRD reader RBAC.
-Custom deployments can use `docs/examples/kubernetes/crd-reader-rbac.yaml` to
-grant the existing detector ServiceAccount these permissions.
-Use the combined deployment even when only Peer objects initially exist: CRD mode
-keeps the authenticated VIP responder running so future VIP objects work without
-another rollout. It requires the HMAC key, responder port, pod namespace and UID,
+The combined manifest includes both CRDs and the required reader permissions.
+It creates no target objects, so the DaemonSet can be installed before any VIP or
+Peer is declared. It requires the HMAC key, responder port, pod namespace and UID,
 Node `get/list/patch`, Lease `get/create/update`, and CRD `list/watch` permissions.
 All instances must use the same CRD mode, key, port and label prefixes.
 The supplied CRD schemas use the Kubernetes CEL IP library (Kubernetes 1.30+).
-
-Applications can declare targets in their own namespaces:
-
-```yaml
-apiVersion: network.osixia.net/v1alpha1
-kind: VIP
-metadata:
-  name: public-web
-  namespace: traefik
-spec:
-  address: 203.0.113.10
----
-apiVersion: network.osixia.net/v1alpha1
-kind: Peer
-metadata:
-  name: database
-  namespace: nextcloud
-spec:
-  address: 10.0.0.20
-  port: 5432
-```
-
-Namespaces must already exist. Examples are in
-[`targets.yaml`](docs/examples/kubernetes/targets.yaml). To delegate target
-management without access to Nodes, bind the example
-[`writer Role`](docs/examples/kubernetes/crd-writer-role.yaml) in each allowed
-namespace. Readers are cluster-wide; writers can remain namespace-scoped.
 
 VIP objects use the existing IP-based labels and share one worker and Lease per
 IP, including duplicates declared by flags. Removing one declaration does not

@@ -26,7 +26,7 @@ func crdObject(kind, namespace, name, address string, port int64) *unstructured.
 		spec["port"] = port
 	}
 	return &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "network.osixia.net/v1alpha1", "kind": kind,
+		"apiVersion": "network.cloud.osixia.net/v1alpha1", "kind": kind,
 		"metadata": map[string]any{"namespace": namespace, "name": name}, "spec": spec,
 	}}
 }

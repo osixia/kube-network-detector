@@ -22,8 +22,8 @@ import (
 )
 
 var (
-	vipResource  = schema.GroupVersionResource{Group: "network.osixia.net", Version: "v1alpha1", Resource: "vips"}
-	peerResource = schema.GroupVersionResource{Group: "network.osixia.net", Version: "v1alpha1", Resource: "peers"}
+	vipResource  = schema.GroupVersionResource{Group: "network.cloud.osixia.net", Version: "v1alpha1", Resource: "vips"}
+	peerResource = schema.GroupVersionResource{Group: "network.cloud.osixia.net", Version: "v1alpha1", Resource: "peers"}
 )
 
 const crdLabelsAnnotation = "kube-network-detector/crd-labels"
