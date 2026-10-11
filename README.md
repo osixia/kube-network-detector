@@ -252,6 +252,14 @@ Node `get/list/patch`, Lease `get/create/update`, and CRD `list/watch` permissio
 All instances must use the same CRD mode, key, port and label prefixes.
 The supplied CRD schemas use the Kubernetes CEL IP library (Kubernetes 1.30+).
 
+Example `VIP` and `Peer` objects are provided in
+[`targets.yaml`](docs/examples/kubernetes/targets.yaml). The target namespaces
+must already exist. Apply them after installing the main manifest:
+
+```bash
+kubectl apply -f docs/examples/kubernetes/targets.yaml
+```
+
 VIP objects use the existing IP-based labels and share one worker and Lease per
 IP, including duplicates declared by flags. Removing one declaration does not
 stop detection while another still exists. Peer objects use the label

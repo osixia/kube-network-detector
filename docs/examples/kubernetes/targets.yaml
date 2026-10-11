@@ -1,0 +1,18 @@
+# Example targets. The namespace must already exist, and the CRDs must have
+# been installed with kube-network-detector.yaml first.
+apiVersion: network.cloud.osixia.net/v1alpha1
+kind: VIP
+metadata:
+  name: gateway-vip
+  namespace: traefik
+spec:
+  address: 203.0.113.10
+---
+apiVersion: network.cloud.osixia.net/v1alpha1
+kind: Peer
+metadata:
+  name: external-host
+  namespace: private-network
+spec:
+  address: 10.0.0.20
+  port: 5432
