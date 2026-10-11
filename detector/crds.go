@@ -200,15 +200,14 @@ func (d *Detector) crdTarget(obj *unstructured.Unstructured, vip bool) (target, 
 	return target{peer: p}, options.PeerLabelPrefix + name, err
 }
 
-// The first dot separates the namespace (a DNS label) from the object name.
-// Hash long identities rather than truncating away their uniqueness. The "crd."
-// marker also separates these names from conventional static peer names.
+// The first dot separates the object name from the namespace (a DNS label).
+// Hash long identities rather than truncating away their uniqueness.
 func crdPeerName(prefix, namespace, name string) string {
-	identity := namespace + "." + name
-	result := "crd." + identity
+	identity := name + "." + namespace
+	result := identity
 	labelPrefix := prefix[strings.LastIndex(prefix, "/")+1:]
 	if len(labelPrefix)+len(result) > 63 {
-		result = fmt.Sprintf("crd.%x", sha256.Sum256([]byte(identity)))[:36]
+		result = fmt.Sprintf("%x", sha256.Sum256([]byte(identity)))[:32]
 	}
 	return result
 }

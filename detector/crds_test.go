@@ -111,17 +111,17 @@ func TestCRDOptionsAndClientValidation(t *testing.T) {
 func TestCRDTargetsDeduplicateVIPsAndProtectStaticPeers(t *testing.T) {
 	d := crdDetector(t)
 	d.options.VIPs = []string{"203.0.113.10"}
-	d.options.Peers = []string{"crd.apps.db=10.0.0.1:5432"}
+	d.options.Peers = []string{"db.apps=10.0.0.1:5432"}
 	vips := []any{crdObject("VIP", "apps", "web", "203.0.113.10", 0), crdObject("VIP", "other", "web", "203.0.113.10", 0)}
 	peers := []any{crdObject("Peer", "apps", "db", "10.0.0.2", 5432), crdObject("Peer", "other", "db", "10.0.0.3", 5432)}
 	targets, labels := d.crdTargets(vips, peers)
 	if len(targets) != 3 || len(labels) != 2 {
 		t.Fatalf("unexpected union: targets=%v labels=%v", targets, labels)
 	}
-	if targets["example.net/peer-crd.apps.db"].peer.address != "10.0.0.1:5432" {
+	if targets["example.net/peer-db.apps"].peer.address != "10.0.0.1:5432" {
 		t.Fatal("CRD replaced a conflicting static target")
 	}
-	if labels["example.net/peer-crd.apps.db"] {
+	if labels["example.net/peer-db.apps"] {
 		t.Fatal("rejected CRD claimed ownership")
 	}
 	targets, _ = d.crdTargets(nil, nil)
@@ -180,7 +180,7 @@ func TestCRDPeerWatchAddUpdateDelete(t *testing.T) {
 	}()
 	d := crdDetector(t)
 	ctx := startCRDTargets(t, d)
-	key := d.options.PeerLabelPrefix + "crd.apps.database"
+	key := d.options.PeerLabelPrefix + "database.apps"
 	hasLabel := func() bool {
 		node, err := d.client.CoreV1().Nodes().Get(ctx, "node", metav1.GetOptions{})
 		return err == nil && node.Labels[key] == "true"
@@ -218,7 +218,7 @@ func TestCRDDuplicateVIPDeletionAndOfflineInventory(t *testing.T) {
 	b := crdObject("VIP", "b", "web", "203.0.113.10", 0)
 	d := crdDetector(t, a, b)
 	key := vipLabel(d.options.VIPLabelPrefix, "203.0.113.10")
-	stale := "example.net/peer-crd.deleted.db"
+	stale := "example.net/peer-db.deleted"
 	journal, _ := json.Marshal([]string{stale})
 	ctx := context.Background()
 	node, err := d.client.CoreV1().Nodes().Get(ctx, "node", metav1.GetOptions{})
@@ -256,7 +256,7 @@ func TestCRDDuplicateVIPDeletionAndOfflineInventory(t *testing.T) {
 func TestCRDCleanupRetriesAPIConflicts(t *testing.T) {
 	d := crdDetector(t)
 	ctx := context.Background()
-	key := "example.net/peer-crd.deleted.db"
+	key := "example.net/peer-db.deleted"
 	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node", Labels: map[string]string{key: "true"}}}
 	client := fake.NewClientset(node)
 	d.client = client

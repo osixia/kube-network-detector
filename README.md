@@ -255,10 +255,10 @@ The supplied CRD schemas use the Kubernetes CEL IP library (Kubernetes 1.30+).
 VIP objects use the existing IP-based labels and share one worker and Lease per
 IP, including duplicates declared by flags. Removing one declaration does not
 stop detection while another still exists. Peer objects use the label
-`<peer-label-prefix>crd.<namespace>.<name>`, for example
-`kube-network-detector/peer-crd.nextcloud.database=true`. Long identities use
-`crd.` plus the first 32 hex digits of their SHA-256 hash. The final label key is
-validated; excessively long custom prefixes can cause targets to be rejected.
+`<peer-label-prefix><name>.<namespace>`, for example
+`kube-network-detector/peer-database.nextcloud=true`. Long identities use the
+first 32 hex digits of their SHA-256 hash. The final label key is validated;
+excessively long custom prefixes can cause targets to be rejected.
 Static peer names and labels are unchanged. If a CRD generates a label already
 used for a different target, the static target takes precedence and the conflicting
 CRD is ignored with a warning. Do not deliberately reuse CRD-generated names in flags.
