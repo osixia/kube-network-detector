@@ -2,6 +2,8 @@
 
 Detect VIP routing and peer TCP connectivity, and maintain Kubernetes node labels.
 
+![kube-network-detector illustration](docs/assets/images/osixia-kube-network-detector.png)
+
 
 The application runs as a DaemonSet on the node network (`hostNetwork: true`).
 It supports IPv4 and IPv6 for both VIPs and peers. Modes are selected automatically:
